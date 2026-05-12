@@ -1,0 +1,144 @@
+/* =====================================
+   BW BATTLESIM THEME – STABLE
+   ===================================== */
+
+:root {
+
+  /* ---------------------------------
+     BASE UI
+     --------------------------------- */
+  --calcite-ui-background: #312d2a;
+  --calcite-ui-foreground-1: #3a3531;
+  --calcite-ui-foreground-2: #443f3a;
+
+  /* ---------------------------------
+     TEXT (🔥 WICHTIG)
+     --------------------------------- */
+  --calcite-color-text-1: #d3c2a6;
+  --calcite-color-text-2: #b8a88e;
+  --calcite-color-text-3: #8a8175;
+
+  /* inverse (für buttons / icons mit kind) */
+  --calcite-color-text-inverse: #ffffff;
+
+  /* ui fallback */
+  --calcite-ui-text-1: #d3c2a6;
+  --calcite-ui-text-2: #b8a88e;
+  --calcite-ui-text-3: #8a8175;
+
+  /* ---------------------------------
+     BRAND / ACCENT
+     --------------------------------- */
+  --calcite-color-brand: #434a39;
+  --calcite-color-brand-hover: #505840;
+  --calcite-color-brand-press: #383f2f;
+
+  --calcite-color-focus: #a7ad6d;
+
+  /* ---------------------------------
+     BORDERS
+     --------------------------------- */
+  --calcite-color-border-1: #616847;
+  --calcite-color-border-2: #505645;
+
+  /* ---------------------------------
+     ICON / UI SPECIAL
+     --------------------------------- */
+  --calcite-color-icon: #d3c2a6;
+}
+
+
+/* =====================================
+   ARC GIS CONTEXT
+   ===================================== */
+
+arcgis-map {
+  --calcite-color-brand: #434a39;
+  --calcite-color-focus: #a7ad6d;
+}
+
+
+/* =====================================
+   BUTTON FIX (🔥 HIER LAG DEIN PROBLEM)
+   ===================================== */
+
+calcite-button {
+  --calcite-color-text-1: #d3c2a6;
+  --calcite-color-text-inverse: #ffffff;
+}
+
+
+/* speziell Reset Button */
+#resetTimeBtn {
+  --calcite-color-text-1: #ffffff;
+  --calcite-color-text-inverse: #ffffff;
+}
+
+
+/* =====================================
+   ACTIONS (dein bestehendes Verhalten – sauber integriert)
+   ===================================== */
+
+calcite-action {
+  background-color: transparent !important;
+  color: var(--calcite-color-text-1);
+
+  border: 1px solid rgba(97, 104, 71, 0.6);
+  border-radius: 2px;
+}
+
+calcite-action::part(container) {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+
+calcite-action {
+  backdrop-filter: blur(2px);
+}
+
+calcite-action:hover {
+  background-color: rgba(67, 74, 57, 0.25);
+}
+
+calcite-action[active] {
+  background-color: rgba(67, 74, 57, 0.35);
+  border-color: #a7ad6d;
+}
+
+calcite-action:focus {
+  outline: 1px solid #a7ad6d;
+  box-shadow: none;
+}
+
+calcite-action svg {
+  fill: currentColor;
+}
+
+
+/* =====================================
+   PANEL / CONTAINERS
+   ===================================== */
+
+calcite-panel,
+calcite-flow-item {
+  background-color: #312d2a;
+  color: var(--calcite-color-text-1);
+  border-color: #616847;
+}
+
+
+/* =====================================
+   TIMESLIDER FIX (besser sichtbar)
+   ===================================== */
+
+arcgis-time-slider {
+  background: rgba(30, 30, 30, 0.95);
+  border-radius: 6px;
+  padding: 6px;
+}
+
+
+#resetTimeBtn {
+  --calcite-color-brand: #ffffff;
+  --calcite-color-brand-hover: #d3c2a6;
+  --calcite-color-brand-press: #616847;
+}

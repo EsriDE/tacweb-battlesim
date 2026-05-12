@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>Visualize data with dictionary renderer | Sample | ArcGIS Maps SDK for JavaScript</title>
+
+    <!-- Load the ArcGIS Maps SDK for JavaScript from CDN -->
+    <script type="module" src="https://js.arcgis.com/5.0/"></script>
+
+    <!-- Load configuration -->
+    <script src="./config.js"></script>
+
+    <!--
+    <script type="module">
+      //import { getToken } from './credentials.js';
+
+      //const token = await getToken();
+      //console.log("Token:", token);
+      //esriConfig.apiKey = token;
+    </script>
+    -->
+
+    <!-- Load credentials WASM module
+    <script type="module">
+      //import init, { get_api_key } from './credentials/pkg/credentials.js';
+
+      //await init();
+      //console.log("API Key from WASM:", get_api_key());
+      //window.esriConfig = { apiKey: get_api_key() };
+      //var esriConfig = { apiKey: get_api_key() };
+    </script>
+     -->
+    
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+    </style>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/calcite-components/2.6.0/calcite.css" />
+    <link rel="stylesheet" href="./styles/bw-theme.css" />
+  </head>
+
+  <body class="calcite-mode-dark">
+    <arcgis-map basemap="gray-vector" zoom="6" center="30,50">
+      
+      <arcgis-zoom slot="top-left"></arcgis-zoom>
+
+      <arcgis-expand slot="top-left" expanded>
+        <arcgis-bookmarks></arcgis-bookmarks>
+      </arcgis-expand>
+      
+      <arcgis-expand slot="top-right" icon="list">
+        <div style="width:300px;">
+          <calcite-panel heading="Combat Log">
+            <div id="combatList"></div>
+          </calcite-panel>
+        </div>
+      </arcgis-expand>
+
+      <div slot="bottom-right" style="display:flex; 
+        gap:8px; 
+        align-items:center; 
+        background:#2b2b2b;
+        padding:8px;
+        border-radius:6px;">
+
+        <arcgis-time-slider
+          id="timeSlider"
+          layout="compact"
+          mode="time-window"
+          play-rate="1000">
+        </arcgis-time-slider>
+
+        <calcite-button
+          id="resetTimeBtn"
+          appearance="outline"
+          scale="s"
+          icon-start="reset">
+        </calcite-button>
+
+      </div>
+
+    </arcgis-map>
+
+    <script>
+      const combatList = document.getElementById("combatList");
+      let combatEvents = [];
+          
+      function clearCombatPanel() {
+        combatList.innerHTML = "";
+      }
+      
+      function deduplicateEvents(events) {
+        const seen = new Set();
+
+        return events.filter(e => {
+          const key = `${e.target.unit_id}_${e.target.dtg}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+      
+      function filterEventsByTime(events, currentTime) {
+        return events.filter(e => e.target.dtg <= currentTime);
+      }
+
+      function jumpToUnit(target, mapElement) {
+        //console.log("Jump to:", target.lon, target.lat);
+
+        mapElement.view.goTo({
+          center: [target.lon, target.lat],
+          zoom: 12
+        });
+      }
+
+      function updateCombatPanel(mapElement, currentTime) {
+        if (!combatEvents || combatEvents.length === 0) return;
+
+        filterEventsByTime(deduplicateEvents(combatEvents), currentTime).forEach(e => {
+
+          if (e.type === "kill") {
+
+            /*
+            const attackers = e.attackers
+              .map(a => a.unit || `Unit ${a.unit_id}`)
+              .join(", ");
+            */
+
+            const item = document.createElement("div");
+
+            item.style.padding = "6px";
+            item.style.marginBottom = "6px";
+            item.style.borderBottom = "1px solid #555";          
+            item.style.cursor = "pointer";
+
+            // Team Farbe
+            const color = e.target.country === "ru" ? "#ff6666" : "#66ff66";
+
+            item.innerHTML = `
+              <strong style="color:${color}">
+                💀 ${e.target.country} ${e.target.unit} Unit: ${e.target.unit_id}
+              </strong><br>
+              <small>${new Date(e.target.dtg).toISOString()} Attackers: ${e.attackerCount}</small>
+            `;
+
+            // CLICK → MAP JUMP
+            item.addEventListener("click", () => {
+              jumpToUnit(e.target, mapElement);
+            });
+
+            // NEUE EVENTS OBEN
+            combatList.prepend(item);
+          }
+        });
+      }
+    </script>
+    
+    <script type="module">
+      /*
+      const [esriId, OAuthInfo] = await $arcgis.import([
+        "@arcgis/core/identity/IdentityManager.js",
+        "@arcgis/core/identity/OAuthInfo.js"
+      ]);
+
+      const info = new OAuthInfo({
+        appId: "Jk3yPBf8EU5x0VPi",
+        portalUrl: "https://flecktarn.maps.arcgis.com/arcgis",
+        popup: true // oder false für redirect flow
+      });
+
+      esriId.registerOAuthInfos([info]);
+      
+      await esriId.checkSignInStatus(info.portalUrl + "/sharing")
+        .catch(() => {
+          return esriId.getCredential(info.portalUrl + "/sharing");
+        });
+      */
+      
+      const [config, FeatureLayer, DictionaryRenderer, Bookmark] = await $arcgis.import([
+        "@arcgis/core/config.js",
+        "@arcgis/core/layers/FeatureLayer.js",
+        "@arcgis/core/renderers/DictionaryRenderer.js",
+        "@arcgis/core/webmap/Bookmark.js",
+      ]);
+      
+      // Scale levels explained
+      // https://developers.arcgis.com/documentation/mapping-and-location-services/reference/zoom-levels-and-scale/#conversion-tool
+
+      const unitHeatMapLayr = new FeatureLayer({
+        url: "https://services9.arcgis.com/Xis6pmWfNBp6lSFb/arcgis/rest/services/Simulated_Battle_Units/FeatureServer",
+        outFields: ["*"],
+        definitionExpression: "is_alive = 1",                
+        renderer: {
+          type: "heatmap",
+          colorStops: [
+            { ratio: 0, color: "rgba(0, 0, 0, 0)" },
+            { ratio: 0.2, color: "rgba(120, 81, 169, 0.6)" },  // soft purple
+            { ratio: 0.5, color: "rgba(102, 45, 145, 0.85)" },
+            { ratio: 1, color: "rgba(45, 0, 75, 1)" }
+          ],          
+          maxPixelIntensity: 100,
+          minPixelIntensity: 0
+        },
+        timeInfo: {
+          startField: "dtg",
+          interval: { value: 2, unit: "minutes" }
+        },
+        
+        maxScale: 150000,
+      });
+
+      const ruUnitHeatMapLayr = new FeatureLayer({
+        url: "https://services9.arcgis.com/Xis6pmWfNBp6lSFb/arcgis/rest/services/Simulated_Battle_Units/FeatureServer",
+        outFields: ["*"],
+        definitionExpression: "country = 'ru' AND is_alive = 1",                
+        renderer: {
+          type: "heatmap", 
+          quality: "low",
+          blurRadius: 12,        
+          colorStops: [
+            { ratio: 0,   color: "rgba(0, 0, 0, 0)" },
+            { ratio: 0.2, color: "rgba(255, 100, 100, 0.3)" },
+            { ratio: 0.5, color: "rgba(255, 50, 50, 0.6)" },
+            { ratio: 0.8, color: "rgba(255, 0, 0, 0.8)" },
+            { ratio: 1,   color: "rgba(180, 0, 0, 1)" }
+          ],
+          maxPixelIntensity: 100,
+          minPixelIntensity: 0
+        },
+        timeInfo: {
+          startField: "dtg",
+          interval: { value: 2, unit: "minutes" }
+        },
+        
+        maxScale: 150000,
+      });
+
+      const uaUnitHeatMapLayr = new FeatureLayer({
+        url: "https://services9.arcgis.com/Xis6pmWfNBp6lSFb/arcgis/rest/services/Simulated_Battle_Units/FeatureServer",
+        outFields: ["*"],
+        definitionExpression: "country = 'ua' AND is_alive = 1",                
+        renderer: {
+          type: "heatmap",
+          quality: "low",
+          blurRadius: 12,             
+          colorStops: [
+            { ratio: 0,   color: "rgba(0, 0, 0, 0)" },
+            { ratio: 0.2, color: "rgba(100, 255, 100, 0.3)" },
+            { ratio: 0.5, color: "rgba(50, 220, 50, 0.6)" },
+            { ratio: 0.8, color: "rgba(0, 180, 0, 0.8)" },
+            { ratio: 1,   color: "rgba(0, 120, 0, 1)" }
+          ],
+          maxPixelIntensity: 100,
+          minPixelIntensity: 0
+        },
+        timeInfo: {
+          startField: "dtg",
+          interval: { value: 2, unit: "minutes" }
+        },
+        
+        maxScale: 150000,
+      });
+
+      const trackLinesRenderer = {
+        type: "unique-value",
+        field: "country",
+        uniqueValueInfos: [
+          {
+            value: "ua",
+            symbol: {
+              type: "simple-line",
+              color: "green",
+              width: 2
+            }
+          },
+          {
+            value: "ru",
+            symbol: {
+              type: "simple-line",
+              color: "red",
+              width: 2
+            }
+          }
+        ]
+      };
+
+      const unitUniqueValLayer = new FeatureLayer({
+        url: "https://services9.arcgis.com/Xis6pmWfNBp6lSFb/arcgis/rest/services/Simulated_Battle_Units/FeatureServer",
+        outFields: ["*"],
+        definitionExpression: "is_alive = 1",        
+        featureReduction: {
+          type: "cluster",
+          clusterRadius: "5px",
+          popupTemplate: {
+              title: "{cluster_count} Units",
+              content: `
+                This cluster contains {cluster_count} units.
+              `
+            }
+        },
+        popupTemplate: {
+          title: `
+            <span style="
+              color: {expression/factionColor};
+              font-weight: bold;
+              font-size: 16px;
+            ">
+              {country} {unit}
+            </span>
+          `,
+
+          content: `
+            <div style="line-height:1.6; font-size:13px">
+
+              <div><b>🆔 Unit ID:</b> {unit_id}</div>
+
+              <div>
+                <b>🏳 Faction:</b> 
+                <span style="color:{expression/factionColor}">
+                  {country}
+                </span>
+              </div>
+
+              <div>
+                <b>❤️ HP:</b> 
+                <span style="font-weight:bold">{hp}</span>
+              </div>
+
+              <div>
+                <b>🛡 Armor:</b> 
+                <span>{armor}</span>
+              </div>
+
+              <div>
+                <b>🎯 Target:</b> 
+                <span>{target_id}</span>
+              </div>
+
+              <div>
+                <b>⚡ Status:</b> 
+                <span>{expression/statusLabel}</span>
+              </div>
+
+              <div>
+                <b>🕒 Time (UTC):</b>
+                <span style="font-family:monospace">
+                  {expression/formattedDate}
+                </span>
+              </div>
+
+            </div>
+          `,
+          expressionInfos: [
+            {
+              // Fraktionsfarbe
+              name: "factionColor",
+              expression: `
+                IIF($feature.country == "ru", "#ff6666",
+                  IIF($feature.country == "ua", "#66ff66", "#cccccc")
+                )
+              `
+            },
+
+            {
+              // Status schöner darstellen
+              name: "statusLabel",
+              expression: `
+                IIF($feature.is_alive == 1, "🟢 Alive", "💀 Destroyed")
+              `
+            },
+
+            {
+              // UTC Zeit korrekt anzeigen
+              name: "formattedDate",
+              expression: `
+                Text(
+                    ToUTC(Date($feature.dtg)),
+                    "YYYY-MM-DD HH:mm:ssZ"
+                  )
+              `
+            }
+          ]
+        },
+        renderer: {
+          type: "unique-value",
+          field: "country",
+          uniqueValueInfos: [
+            { value: "ua", label: "Ukraine", symbol: { type: "simple-marker", color: "green" } },
+            { value: "ru", label: "Russia", symbol: { type: "simple-marker", color: "red" } }
+          ]
+        },
+        opacity: 0.4,
+        timeInfo: {
+          startField: "dtg",
+          interval: { value: 2, unit: "minutes" },
+          //trackIdField: "unit_id",
+        },
+        /*
+        trackInfo: {
+          enabled: false,
+          // display all observations in the track for duration of user session
+          maxDisplayDuration: {
+            value: 30,
+            unit: "minutes",
+          },
+
+          maxDisplayObservationsPerTrack: 10,
+          
+          previousObservations: {
+            visible: true // optional aus
+          },
+
+          latestObservations: {
+            visible: true
+          },
+
+          trackLines: {
+            visible: false,
+            renderer: trackLinesRenderer
+          }
+        },
+        */
+        minScale: 150000,
+        maxScale: 3000,
+      });
+
+      const unitLayer = new FeatureLayer({
+        url: "https://services9.arcgis.com/Xis6pmWfNBp6lSFb/arcgis/rest/services/Simulated_Battle_Units/FeatureServer",
+        outFields: ["*"],
+        definitionExpression: "is_alive = 1",
+        renderer: new DictionaryRenderer({
+            url: "https://www.arcgis.com/sharing/rest/content/items/28b984edbd104912875d63cbe8ec038b",
+            fieldMap: {
+              sidc: "sic"
+            },
+            config: {
+              show_label: "false",
+            },
+          }),
+        timeInfo: {
+          startField: "dtg",
+          interval: { value: 2, unit: "minutes" }
+        },
+        //minScale: 150000,
+        //maxScale: 3000,
+        //minScale: 3000,
+        //maxScale: 1000,
+      });
+
+      // Get a reference to the map, time-slider and bookmarks components
+      const mapElement = document.querySelector("arcgis-map");
+      const timeSlider = document.querySelector("arcgis-time-slider");
+
+      /*
+      const result = await unitUniqueValLayer.queryFeatures({
+        where: "unit_id = 529 AND target_id = 567",
+        outFields: ["*"]
+      });
+
+      console.log("Layer Query Result:", result.features);
+      */
+
+      await mapElement.viewOnReady();           // wait for map view
+      mapElement.map.add(unitHeatMapLayr);     // add the heatmap layer
+      //mapElement.map.add(ruUnitHeatMapLayr);
+      //mapElement.map.add(uaUnitHeatMapLayr);
+      mapElement.map.add(unitUniqueValLayer); // add the unique value layer
+      //mapElement.map.add(unitLayer);            // add the layer
+      //await mapElement.whenLayerView(unitLayer); // optional: wait for layer view
+
+      /*
+      mapElement.view.on("click", () => {
+        const extent = mapElement.view.extent;
+        console.log("Bookmark extent:");
+        console.log(extent.toJSON());
+      });
+      */
+
+      // Set time slider properties – same pattern as the sample code
+      let minTime = 1778255735670;
+      let startDate = new Date(minTime);
+      // Define endDate 24h after startDate to ensure slider functionality even if all timestamps are identical
+      const MINUTE = 60 * 1000;
+      let endDate = new Date(startDate.getTime() + (24 * 60 - 3) * MINUTE); // 24 hours - 3 min later
+      
+      const playRate = 100;
+      timeSlider.fullTimeExtent = { start: startDate, end: endDate };
+      timeSlider.stops = { interval: { value: 2, unit: "minutes" } };
+      timeSlider.playRate = playRate;
+      timeSlider.mode = "time-window";
+      //timeSlider.mode = "instant";
+
+      //console.log(`Time slider extent: ${startDate.toISOString()} -> ${endDate.toISOString()}`);
+
+      const resetBtn = document.getElementById("resetTimeBtn");
+      resetBtn.addEventListener("click", () => {
+        const fullExtent = timeSlider.fullTimeExtent;
+
+        // stoppt Animation
+        timeSlider.stop();
+
+        // setzt auf Anfang
+        timeSlider.fullTimeExtent = fullExtent;
+        timeSlider.stops = { interval: { value: 2, unit: "minutes" } };
+        timeSlider.playRate = playRate;
+        timeSlider.mode = "time-window";
+
+        // Combat model reset
+        const currentTime = fullExtent.start.getTime();
+        combatModel.reset();
+        clearCombatPanel();
+        updateCombatPanel(mapElement, currentTime);
+      });
+
+      // Combat Model
+      import { CombatModel } from "./combatModel.js";
+      const combatModel = new CombatModel(unitUniqueValLayer);
+      
+      let lastTime = null;
+      setInterval(async () => {
+        const extent = timeSlider.timeExtent;
+
+        if (!extent?.start) return;
+
+        const currentTime = extent.start.getTime();
+
+        if (currentTime === lastTime) return;
+        //console.log(extent.start.toISOString() + "-" + extent.end.toISOString());
+
+        if (lastTime !== null && currentTime < lastTime) {
+            //console.log("Time moved backwards → reset");
+            combatModel.reset();
+            clearCombatPanel();
+            updateCombatPanel(mapElement, currentTime);
+        }
+
+        lastTime = currentTime;
+
+        //console.log("Time changed:", new Date(currentTime));
+
+
+        const events = await combatModel.update(extent);        
+        if (events && events.length > 0) {
+          combatEvents.push(...events);
+          updateCombatPanel(mapElement, currentTime);
+          //console.log(new Date(currentTime));
+        }
+      }, 3000);
+
+      
+      const bookmarksElement = document.querySelector("arcgis-bookmarks");
+      await bookmarksElement.componentOnReady();
+      
+      bookmarksElement.bookmarks = [
+        /*
+        new Bookmark({
+          name: "RUS",
+          viewpoint: {
+            targetGeometry: {
+              type: "extent",
+              spatialReference: {
+                "latestWkid": 3857,
+                "wkid": 102100
+              },
+              xmin: 4079342.2835419253,
+              ymin: 6028490.153667575,
+              xmax: 4086694.570200096,
+              ymax: 6033592.325305603
+            },
+          },
+        }),
+        */
+        new Bookmark({
+          name: "Kyiv Axis (Initial Push)",
+          viewpoint: {
+            targetGeometry: {
+              type: "extent",
+              spatialReference: {
+                "latestWkid": 3857,
+                "wkid": 102100
+              },
+              xmin: 3140848,
+              ymin: 6614131,
+              xmax: 3555748,
+              ymax: 6940670
+            },
+          },
+        }),
+
+        new Bookmark({
+          name: "Kharkiv Front",
+          viewpoint: {
+            targetGeometry: {
+              type: "extent",
+              spatialReference: { wkid: 102100 },
+              xmax: 4153816,
+              xmin: 3946366,
+              ymax: 6558795,
+              ymin: 6395525
+            },
+          },
+        }),
+
+        new Bookmark({
+          name: "Donbas Core (Battle of Bakhmut)",
+          viewpoint: {
+            targetGeometry: {
+              type: "extent",
+              spatialReference: { wkid: 102100 },
+              xmin: 4180260,
+              ymin: 6164805,
+              xmax: 4283985,
+              ymax: 6246440,
+            },
+          },
+        }),
+        new Bookmark({
+          name: "Zaporizhzhia Axis",
+          viewpoint: {
+            targetGeometry: {
+              type: "extent",
+              spatialReference: { wkid: 102100 },
+              xmax: 4195393,
+              xmin: 3780493,
+              ymax: 6202710,
+              ymin: 5876172,
+            },
+          },
+        }),
+        new Bookmark({
+          name: "Kherson-Dnipro Crossing",
+          viewpoint: {
+            targetGeometry: {
+              type: "extent",
+              spatialReference: { wkid: 102100 },
+              xmax: 3749928,
+              xmin: 3542478,
+              ymax: 5988646,
+              ymin: 5825377
+            },
+          },
+        })
+      ];
+
+    </script>
+  </body>
+</html>
