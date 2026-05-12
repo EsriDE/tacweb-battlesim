@@ -488,7 +488,7 @@
       const MINUTE = 60 * 1000;
       let endDate = new Date(startDate.getTime() + (24 * 60 - 3) * MINUTE); // 24 hours - 3 min later
       
-      const playRate = 100;
+      const playRate = 1000;
       timeSlider.fullTimeExtent = { start: startDate, end: endDate };
       timeSlider.stops = { interval: { value: 2, unit: "minutes" } };
       timeSlider.playRate = playRate;
