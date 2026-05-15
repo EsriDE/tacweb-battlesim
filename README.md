@@ -8,6 +8,13 @@ A lightweight web-based prototype for visualizing and analyzing **simulated batt
 
 This prototype demonstrates how time-enabled spatial data can be used to build an **interactive tactical situation display**.
 
+At the heart of the prototype lies the integration of a tactical simulation engine, directly connecting with a publicly available [Rheinmetall tactical core API](https://github.com/Rheinmetall/tacticalapi).  
+
+This component is used to:  
+- Propagate unit movement based on defined parameters (e.g., speed, range)
+- Simulate interactions using simplified combat attributes (e.g., health, armor)
+- Enforce consistent behavioral logic across all entities 
+
 It combines:
 
 - 📍 Time-enabled unit positions  
