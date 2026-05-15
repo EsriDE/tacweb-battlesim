@@ -8,6 +8,7 @@ on:
 jobs:
   generate-token:
     runs-on: ubuntu-latest
+    environment: github-pages
 
     steps:
       - name: Checkout repo
