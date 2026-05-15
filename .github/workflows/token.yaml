@@ -23,9 +23,6 @@ jobs:
             -d "grant_type=client_credentials" \
             -d "expiration=4320")
 
-            echo "Full response:"
-            echo "$RESPONSE"
-
             TOKEN=$(echo $RESPONSE | jq -r '.access_token')
 
             echo "Extracted token: $TOKEN"
